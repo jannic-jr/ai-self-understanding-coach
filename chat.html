@@ -263,20 +263,20 @@
 
         // API設定（本番環境では環境変数から取得）
         const AIRTABLE_CONFIG = {
-            apiKey: 'YOUR_AIRTABLE_API_TOKEN', // 実際のトークンに置き換えてください
-            baseId: 'YOUR_BASE_ID', // 実際のBase IDに置き換えてください
+            apiKey: 'patL8zsxO1oyIi1DL.862651908e2c8aa4c734cf5cb8806d64f6384df9687e8171ba1fa01066611c50', // 実際のトークンに置き換えてください
+            baseId: 'appbMWFxmPPLoiCQb', // 実際のBase IDに置き換えてください
             usersTable: 'Users',
             wantToTable: 'WantTo'
         };
 
         const DIFY_CONFIG = {
-            apiKey: 'YOUR_DIFY_API_KEY', // 実際のDify APIキーに置き換えてください
+            apiKey: 'app-mfvwHL3Q3bF2oYNY53NTr3cJ', // 実際のDify APIキーに置き換えてください
             baseUrl: 'https://api.dify.ai/v1',
-            appId: 'YOUR_DIFY_APP_ID' // 実際のDify App IDに置き換えてください
+            appId: '8482ba6e-780f-4e39-8568-fe59917b5080' // 実際のDify App IDに置き換えてください
         };
 
         // 開発モード設定（本番環境ではfalseに設定）
-        const USE_SIMULATION = true; // trueの場合はシミュレーション、falseの場合は実際のDify API
+        const USE_SIMULATION = false; // trueの場合はシミュレーション、falseの場合は実際のDify API
 
         // Airtable API関数
         class AirtableAPI {
@@ -631,18 +631,21 @@
         function addMessage(content, sender) {
             const chatMessages = document.getElementById('chatMessages');
             const messageDiv = document.createElement('div');
-            messageDiv.className = 'flex items-start space-x-3 mb-6 message-animation';
             
             if (sender === 'user') {
+                // ユーザーメッセージ：右側に表示
+                messageDiv.className = 'flex items-start justify-end space-x-3 mb-6 message-animation';
                 messageDiv.innerHTML = `
+                    <div class="bg-message-user text-white rounded-2xl rounded-tr-md p-4 max-w-2xl">
+                        ${content.replace(/\n/g, '<br>')}
+                    </div>
                     <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
                         <span class="text-sm">👤</span>
                     </div>
-                    <div class="bg-message-user text-white rounded-2xl rounded-tl-md p-4 max-w-2xl">
-                        ${content.replace(/\n/g, '<br>')}
-                    </div>
                 `;
             } else {
+                // AIメッセージ：左側に表示
+                messageDiv.className = 'flex items-start space-x-3 mb-6 message-animation';
                 messageDiv.innerHTML = `
                     <div class="w-8 h-8 bg-gradient-to-r from-green-500 to-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
                         <span class="text-sm">🤖</span>
@@ -661,6 +664,7 @@
             const chatMessages = document.getElementById('chatMessages');
             const typingDiv = document.createElement('div');
             typingDiv.id = 'typingIndicator';
+            // AIメッセージと同様に左側に表示
             typingDiv.className = 'flex items-start space-x-3 mb-6';
             typingDiv.innerHTML = `
                 <div class="w-8 h-8 bg-gradient-to-r from-green-500 to-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
