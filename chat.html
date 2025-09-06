@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>自己理解コーチ - AI チャット</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'primary': '#0F0F23',
+                        'secondary': '#1A1A2E',
+                        'accent': '#16213E',
+                        'chat-bg': '#2D2D30',
+                        'sidebar-bg': '#1E1E1E',
+                        'message-user': '#0084FF',
+                        'message-ai': '#F1F1F1',
+                    },
+                    fontFamily: {
+                        'sans': ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #2D2D30;
+            color: #ffffff;
+        }
+        
+        .sidebar-scroll::-webkit-scrollbar {
+            width: 4px;
+        }
+        
+        .sidebar-scroll::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        
+        .sidebar-scroll::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 2px;
+        }
+        
+        .chat-scroll::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .chat-scroll::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        
+        .chat-scroll::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+        
+        .message-animation {
+            animation: slideUp 0.3s ease-out;
+        }
+        
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .typing-indicator {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #9CA3AF;
+            animation: typing 1.4s infinite ease-in-out;
+        }
+        
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        .typing-dot:nth-child(3) { animation-delay: 0s; }
+        
+        @keyframes typing {
+            0%, 80%, 100% {
+                transform: scale(0.8);
+                opacity: 0.5;
+            }
+            40% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+        
+        .login-modal {
+            backdrop-filter: blur(10px);
+            background: rgba(0, 0, 0, 0.8);
+        }
+    </style>
+</head>
+<body class="h-screen overflow-hidden">
+    <!-- ログインモーダル -->
+    <div id="loginModal" class="fixed inset-0 login-modal flex items-center justify-center z-50">
+        <div class="bg-sidebar-bg rounded-2xl p-8 max-w-md w-full mx-4 border border-gray-700">
+            <div class="text-center mb-8">
+                <div class="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <span class="text-2xl">🤖</span>
+                </div>
+                <h2 class="text-2xl font-bold text-white mb-2">自己理解コーチ</h2>
+                <p class="text-gray-400">ログインして自己理解の旅を始めましょう</p>
+            </div>
+            
+            <form id="loginForm" class="space-y-6">
+                <div>
+                    <label for="username" class="block text-sm font-medium text-gray-300 mb-2">ユーザーID</label>
+                    <input type="text" id="username" name="username" required 
+                           class="w-full px-4 py-3 bg-chat-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400"
+                           placeholder="ユーザーIDを入力">
+                </div>
+                <div>
+                    <label for="password" class="block text-sm font-medium text-gray-300 mb-2">パスワード</label>
+                    <input type="password" id="password" name="password" required
+                           class="w-full px-4 py-3 bg-chat-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400"
+                           placeholder="パスワードを入力">
+                </div>
+                <button type="submit" 
+                        class="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-3 px-6 rounded-lg font-medium hover:from-blue-600 hover:to-purple-700 transition-all duration-200 transform hover:scale-105">
+                    ログイン
+                </button>
+            </form>
+            
+            <div class="mt-6 text-center">
+                <p class="text-gray-400 text-sm">
+                    アカウントをお持ちでない場合は、<br>
+                    任意のユーザーIDとパスワードでログインできます
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- メインレイアウト -->
+    <div id="mainApp" class="hidden h-full flex">
+        <!-- サイドバー -->
+        <div class="w-80 bg-sidebar-bg border-r border-gray-700 flex flex-col">
+            <!-- サイドバーヘッダー -->
+            <div class="p-4 border-b border-gray-700">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                            <span class="text-lg">🤖</span>
+                        </div>
+                        <div>
+                            <h1 class="text-lg font-semibold text-white">自己理解コーチ</h1>
+                            <p class="text-xs text-gray-400" id="userInfo">ログイン中...</p>
+                        </div>
+                    </div>
+                    <button id="logoutBtn" class="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-gray-700">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                        </svg>
+                    </button>
+                </div>
+                <button id="newChatBtn" class="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-2 px-4 rounded-lg font-medium hover:from-blue-600 hover:to-purple-700 transition-all duration-200 flex items-center justify-center space-x-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                    </svg>
+                    <span>新しいチャット</span>
+                </button>
+            </div>
+
+            <!-- チャット履歴 -->
+            <div class="flex-1 overflow-y-auto sidebar-scroll">
+                <div class="p-4">
+                    <h2 class="text-sm font-medium text-gray-400 mb-3">チャット履歴</h2>
+                    <div id="chatHistory" class="space-y-2">
+                        <!-- チャット履歴がここに表示される -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Want to 結果表示 -->
+            <div class="p-4 border-t border-gray-700">
+                <h3 class="text-sm font-medium text-gray-400 mb-2">最新のWant to</h3>
+                <div id="latestWantTo" class="bg-chat-bg rounded-lg p-3 text-sm text-gray-300">
+                    まだWant toが特定されていません
+                </div>
+            </div>
+        </div>
+
+        <!-- メインチャットエリア -->
+        <div class="flex-1 flex flex-col">
+            <!-- チャットヘッダー -->
+            <div class="bg-sidebar-bg border-b border-gray-700 p-4">
+                <div class="flex items-center space-x-3">
+                    <div class="w-8 h-8 bg-gradient-to-r from-green-500 to-blue-500 rounded-full flex items-center justify-center">
+                        <span class="text-sm">🎯</span>
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-semibold text-white">自己理解セッション</h2>
+                        <p class="text-xs text-gray-400">あなたのWant toを見つけるお手伝いをします</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- チャットメッセージエリア -->
+            <div class="flex-1 overflow-y-auto chat-scroll p-4" id="chatMessages">
+                <!-- 初回メッセージ -->
+                <div class="flex items-start space-x-3 mb-6">
+                    <div class="w-8 h-8 bg-gradient-to-r from-green-500 to-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+                        <span class="text-sm">🤖</span>
+                    </div>
+                    <div class="bg-message-ai text-gray-800 rounded-2xl rounded-tl-md p-4 max-w-2xl">
+                        <p class="mb-3">こんにちは！私は自己理解をサポートするコーチです。</p>
+                        <p class="mb-3">今日は、あなたの心の底からやりたいこと（Want to）を一緒に見つけていきましょう。</p>
+                        <p>この会話を通じて、あなた自身の本質的な欲求を理解し、それが社会にどのように貢献できるかを明確にしていきます。</p>
+                        <p class="mt-3 font-medium">準備はいかがですか？自己理解の旅を始めてみませんか？</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 入力エリア -->
+            <div class="border-t border-gray-700 p-4">
+                <div class="flex items-end space-x-4">
+                    <div class="flex-1">
+                        <textarea id="messageInput" 
+                                  placeholder="メッセージを入力してください..."
+                                  class="w-full bg-chat-bg border border-gray-600 rounded-2xl px-4 py-3 text-white placeholder-gray-400 resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                  rows="1"></textarea>
+                    </div>
+                    <button id="sendBtn" 
+                            class="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-3 rounded-full hover:from-blue-600 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div class="mt-2 text-xs text-gray-500 text-center">
+                    Enterで送信、Shift+Enterで改行
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // グローバル変数
+        let currentUser = null;
+        let currentChatId = null;
+        let chatHistory = [];
+        let isTyping = false;
+
+        // API設定（本番環境では環境変数から取得）
+        const AIRTABLE_CONFIG = {
+            apiKey: 'YOUR_AIRTABLE_API_TOKEN', // 実際のトークンに置き換えてください
+            baseId: 'YOUR_BASE_ID', // 実際のBase IDに置き換えてください
+            usersTable: 'Users',
+            wantToTable: 'WantTo'
+        };
+
+        const DIFY_CONFIG = {
+            apiKey: 'YOUR_DIFY_API_KEY', // 実際のDify APIキーに置き換えてください
+            baseUrl: 'https://api.dify.ai/v1',
+            appId: 'YOUR_DIFY_APP_ID' // 実際のDify App IDに置き換えてください
+        };
+
+        // 開発モード設定（本番環境ではfalseに設定）
+        const USE_SIMULATION = true; // trueの場合はシミュレーション、falseの場合は実際のDify API
+
+        // Airtable API関数
+        class AirtableAPI {
+            constructor(config) {
+                this.config = config;
+                this.baseUrl = `https://api.airtable.com/v0/${config.baseId}`;
+                this.headers = {
+                    'Authorization': `Bearer ${config.apiKey}`,
+                    'Content-Type': 'application/json'
+                };
+            }
+
+            async createUser(userId, password) {
+                try {
+                    const response = await fetch(`${this.baseUrl}/${this.config.usersTable}`, {
+                        method: 'POST',
+                        headers: this.headers,
+                        body: JSON.stringify({
+                            fields: {
+                                user_id: userId,
+                                password: password
+                            }
+                        })
+                    });
+                    return await response.json();
+                } catch (error) {
+                    console.error('Error creating user:', error);
+                    return null;
+                }
+            }
+
+            async getUserByUserId(userId) {
+                try {
+                    const response = await fetch(
+                        `${this.baseUrl}/${this.config.usersTable}?filterByFormula={user_id}="${userId}"`,
+                        {
+                            headers: this.headers
+                        }
+                    );
+                    const data = await response.json();
+                    return data.records.length > 0 ? data.records[0] : null;
+                } catch (error) {
+                    console.error('Error getting user:', error);
+                    return null;
+                }
+            }
+
+            async saveWantTo(userId, wantToContent, sessionId, confidenceLevel = 5) {
+                try {
+                    // 既存のWant toを確認
+                    const existingResponse = await fetch(
+                        `${this.baseUrl}/${this.config.wantToTable}?filterByFormula=AND({user_id}="${userId}", {session_id}="${sessionId}")`,
+                        {
+                            headers: this.headers
+                        }
+                    );
+                    const existingData = await existingResponse.json();
+
+                    if (existingData.records.length > 0) {
+                        // 更新
+                        const recordId = existingData.records[0].id;
+                        const response = await fetch(`${this.baseUrl}/${this.config.wantToTable}/${recordId}`, {
+                            method: 'PATCH',
+                            headers: this.headers,
+                            body: JSON.stringify({
+                                fields: {
+                                    want_to_content: wantToContent,
+                                    confidence_level: confidenceLevel
+                                }
+                            })
+                        });
+                        return await response.json();
+                    } else {
+                        // 新規作成
+                        const response = await fetch(`${this.baseUrl}/${this.config.wantToTable}`, {
+                            method: 'POST',
+                            headers: this.headers,
+                            body: JSON.stringify({
+                                fields: {
+                                    user_id: userId,
+                                    want_to_content: wantToContent,
+                                    session_id: sessionId,
+                                    confidence_level: confidenceLevel
+                                }
+                            })
+                        });
+                        return await response.json();
+                    }
+                } catch (error) {
+                    console.error('Error saving Want to:', error);
+                    return null;
+                }
+            }
+
+            async getLatestWantTo(userId) {
+                try {
+                    const response = await fetch(
+                        `${this.baseUrl}/${this.config.wantToTable}?filterByFormula={user_id}="${userId}"&sort[0][field]=created_at&sort[0][direction]=desc&maxRecords=1`,
+                        {
+                            headers: this.headers
+                        }
+                    );
+                    const data = await response.json();
+                    return data.records.length > 0 ? data.records[0] : null;
+                } catch (error) {
+                    console.error('Error getting latest Want to:', error);
+                    return null;
+                }
+            }
+        }
+
+        // Dify API関数
+        class DifyAPI {
+            constructor(config) {
+                this.config = config;
+                this.conversationId = null;
+                this.headers = {
+                    'Authorization': `Bearer ${config.apiKey}`,
+                    'Content-Type': 'application/json'
+                };
+            }
+
+            async sendMessage(message, userId) {
+                try {
+                    const requestBody = {
+                        inputs: {},
+                        query: message,
+                        response_mode: "blocking",
+                        user: userId
+                    };
+
+                    // 既存の会話がある場合は conversation_id を追加
+                    if (this.conversationId) {
+                        requestBody.conversation_id = this.conversationId;
+                    }
+
+                    const response = await fetch(`${this.config.baseUrl}/chat-messages`, {
+                        method: 'POST',
+                        headers: this.headers,
+                        body: JSON.stringify(requestBody)
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const data = await response.json();
+                    
+                    // conversation_idを保存
+                    if (data.conversation_id) {
+                        this.conversationId = data.conversation_id;
+                    }
+
+                    return {
+                        message: data.answer,
+                        conversationId: data.conversation_id,
+                        messageId: data.id
+                    };
+                } catch (error) {
+                    console.error('Error sending message to Dify:', error);
+                    throw error;
+                }
+            }
+
+            // 新しい会話を開始
+            startNewConversation() {
+                this.conversationId = null;
+            }
+
+            // Want toの抽出を試みる（簡易実装）
+            extractWantTo(message) {
+                // 実際の実装では、より高度なNLPやキーワード検出を使用
+                const wantToIndicators = [
+                    'want to',
+                    'やりたいこと',
+                    '欲求',
+                    '本当にやりたい',
+                    'したいこと',
+                    '情熱',
+                    '夢中になれる'
+                ];
+
+                const lowerMessage = message.toLowerCase();
+                const hasWantToIndicator = wantToIndicators.some(indicator => 
+                    lowerMessage.includes(indicator)
+                );
+
+                if (hasWantToIndicator) {
+                    // メッセージから具体的なWant toを抽出する簡易実装
+                    // 実際の実装では、より精密な抽出ロジックを使用
+                    const sentences = message.split(/[。．！？\n]/);
+                    for (const sentence of sentences) {
+                        if (sentence.length > 10 && wantToIndicators.some(indicator => 
+                            sentence.toLowerCase().includes(indicator))) {
+                            return {
+                                wantTo: sentence.trim(),
+                                confidence: 7 // 1-10のスケール
+                            };
+                        }
+                    }
+                }
+
+                return null;
+            }
+        }
+
+        const airtableAPI = new AirtableAPI(AIRTABLE_CONFIG);
+        const difyAPI = new DifyAPI(DIFY_CONFIG);
+
+        // ログイン処理
+        document.getElementById('loginForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            if (username && password) {
+                // ローディング表示
+                const submitBtn = e.target.querySelector('button[type="submit"]');
+                const originalText = submitBtn.textContent;
+                submitBtn.textContent = 'ログイン中...';
+                submitBtn.disabled = true;
+
+                try {
+                    // ユーザーの存在確認
+                    let user = await airtableAPI.getUserByUserId(username);
+                    
+                    if (!user) {
+                        // 新規ユーザーの場合、作成
+                        user = await airtableAPI.createUser(username, password);
+                        if (!user) {
+                            throw new Error('ユーザーの作成に失敗しました');
+                        }
+                    } else {
+                        // 既存ユーザーのパスワード確認（簡易実装）
+                        if (user.fields.password !== password) {
+                            throw new Error('パスワードが正しくありません');
+                        }
+                    }
+
+                    currentUser = {
+                        id: username,
+                        password: password,
+                        airtableId: user.id
+                    };
+                    
+                    // ログイン成功
+                    document.getElementById('loginModal').classList.add('hidden');
+                    document.getElementById('mainApp').classList.remove('hidden');
+                    document.getElementById('userInfo').textContent = `${username}さん`;
+                    
+                    // 最新のWant toを読み込み
+                    await loadLatestWantTo();
+                    
+                    // 新しいチャットを開始
+                    startNewChat();
+                    
+                } catch (error) {
+                    alert('ログインエラー: ' + error.message);
+                } finally {
+                    // ローディング解除
+                    submitBtn.textContent = originalText;
+                    submitBtn.disabled = false;
+                }
+            }
+        });
+
+        // ログアウト処理
+        document.getElementById('logoutBtn').addEventListener('click', function() {
+            currentUser = null;
+            currentChatId = null;
+            document.getElementById('loginModal').classList.remove('hidden');
+            document.getElementById('mainApp').classList.add('hidden');
+            document.getElementById('username').value = '';
+            document.getElementById('password').value = '';
+        });
+
+        // 新しいチャット開始
+        document.getElementById('newChatBtn').addEventListener('click', startNewChat);
+
+        function startNewChat() {
+            currentChatId = 'chat_' + Date.now();
+            const chatMessages = document.getElementById('chatMessages');
+            
+            // チャットエリアをクリア（初回メッセージは残す）
+            const initialMessage = chatMessages.querySelector('.flex:first-child');
+            chatMessages.innerHTML = '';
+            if (initialMessage) {
+                chatMessages.appendChild(initialMessage);
+            }
+            
+            // Difyの新しい会話を開始
+            difyAPI.startNewConversation();
+            
+            // チャット履歴に追加
+            addChatToHistory(currentChatId, '新しいセッション');
+        }
+
+        // チャット履歴に追加
+        function addChatToHistory(chatId, title) {
+            const historyContainer = document.getElementById('chatHistory');
+            const chatItem = document.createElement('div');
+            chatItem.className = 'p-3 rounded-lg hover:bg-gray-700 cursor-pointer transition-colors duration-200 border-l-2 border-transparent hover:border-blue-500';
+            chatItem.innerHTML = `
+                <div class="text-sm font-medium text-white truncate">${title}</div>
+                <div class="text-xs text-gray-400 mt-1">${new Date().toLocaleString('ja-JP')}</div>
+            `;
+            chatItem.onclick = () => loadChat(chatId);
+            
+            historyContainer.insertBefore(chatItem, historyContainer.firstChild);
+        }
+
+        // チャット読み込み（将来の実装用）
+        function loadChat(chatId) {
+            // 実装予定：選択されたチャットを読み込む
+            console.log('Loading chat:', chatId);
+        }
+
+        // メッセージ送信処理
+        document.getElementById('sendBtn').addEventListener('click', sendMessage);
+        document.getElementById('messageInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        // テキストエリアの自動リサイズ
+        document.getElementById('messageInput').addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+        });
+
+        function sendMessage() {
+            const messageInput = document.getElementById('messageInput');
+            const message = messageInput.value.trim();
+            
+            if (!message || isTyping) return;
+            
+            // ユーザーメッセージを表示
+            addMessage(message, 'user');
+            messageInput.value = '';
+            messageInput.style.height = 'auto';
+            
+            // AIの応答を取得（設定に応じてシミュレーションまたは実際のAPI）
+            if (USE_SIMULATION) {
+                simulateAIResponse(message);
+            } else {
+                getAIResponse(message);
+            }
+        }
+
+        function addMessage(content, sender) {
+            const chatMessages = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'flex items-start space-x-3 mb-6 message-animation';
+            
+            if (sender === 'user') {
+                messageDiv.innerHTML = `
+                    <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
+                        <span class="text-sm">👤</span>
+                    </div>
+                    <div class="bg-message-user text-white rounded-2xl rounded-tl-md p-4 max-w-2xl">
+                        ${content.replace(/\n/g, '<br>')}
+                    </div>
+                `;
+            } else {
+                messageDiv.innerHTML = `
+                    <div class="w-8 h-8 bg-gradient-to-r from-green-500 to-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+                        <span class="text-sm">🤖</span>
+                    </div>
+                    <div class="bg-message-ai text-gray-800 rounded-2xl rounded-tl-md p-4 max-w-2xl">
+                        ${content.replace(/\n/g, '<br>')}
+                    </div>
+                `;
+            }
+            
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function showTypingIndicator() {
+            const chatMessages = document.getElementById('chatMessages');
+            const typingDiv = document.createElement('div');
+            typingDiv.id = 'typingIndicator';
+            typingDiv.className = 'flex items-start space-x-3 mb-6';
+            typingDiv.innerHTML = `
+                <div class="w-8 h-8 bg-gradient-to-r from-green-500 to-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+                    <span class="text-sm">🤖</span>
+                </div>
+                <div class="bg-message-ai text-gray-800 rounded-2xl rounded-tl-md p-4">
+                    <div class="typing-indicator">
+                        <div class="typing-dot"></div>
+                        <div class="typing-dot"></div>
+                        <div class="typing-dot"></div>
+                    </div>
+                </div>
+            `;
+            
+            chatMessages.appendChild(typingDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function hideTypingIndicator() {
+            const typingIndicator = document.getElementById('typingIndicator');
+            if (typingIndicator) {
+                typingIndicator.remove();
+            }
+        }
+
+        // AIの応答を取得（Dify APIを使用）
+        async function getAIResponse(userMessage) {
+            isTyping = true;
+            showTypingIndicator();
+            
+            try {
+                // Dify APIを呼び出し
+                const result = await difyAPI.sendMessage(userMessage, currentUser.id);
+                
+                hideTypingIndicator();
+                addMessage(result.message, 'ai');
+                
+                // AIの応答からWant toを抽出
+                const extractedWantTo = difyAPI.extractWantTo(result.message);
+                if (extractedWantTo) {
+                    console.log('Want to detected:', extractedWantTo);
+                    updateLatestWantTo(extractedWantTo.wantTo);
+                    // Airtableに保存
+                    await saveWantTo(extractedWantTo.wantTo, extractedWantTo.confidence);
+                }
+                
+                isTyping = false;
+            } catch (error) {
+                hideTypingIndicator();
+                console.error('Error getting AI response:', error);
+                
+                // フォールバック応答
+                const fallbackResponse = '申し訳ございません。一時的にサービスに接続できません。しばらくしてから再度お試しください。';
+                addMessage(fallbackResponse, 'ai');
+                isTyping = false;
+            }
+        }
+
+        // AIの応答をシミュレート（開発・テスト用）
+        function simulateAIResponse(userMessage) {
+            isTyping = true;
+            showTypingIndicator();
+            
+            // シミュレートされた応答（開発・テスト用）
+            setTimeout(async () => {
+                hideTypingIndicator();
+                
+                // サンプル応答
+                let response = '';
+                if (userMessage.toLowerCase().includes('はじめ') || userMessage.toLowerCase().includes('お願い')) {
+                    response = `ありがとうございます！それでは、自己理解の旅を始めましょう。
+
+まず最初に、これまでのあなたの経験について教えてください。
+
+過去に所属した会社や組織、コミュニティ、部活など、人との関わりがある場所を思い出してみてください。その中で「苦なく働けた」「夢中になれた」「パフォーマンスが高かった」と感じた場所はありますか？
+
+どのような場所だったか、2つほど教えていただけますでしょうか？`;
+                } else {
+                    response = `なるほど、${userMessage}についてお聞かせいただき、ありがとうございます。
+
+もう少し詳しく教えていただけますか？その時のあなたの気持ちや、どのような点が特に印象に残っているかなど、具体的なエピソードがあれば教えてください。
+
+あなたの内側にある本当の欲求を理解するために、ゆっくりと一緒に探っていきましょう。`;
+                }
+                
+                addMessage(response, 'ai');
+                isTyping = false;
+                
+                // Want to の更新をシミュレート（実際の実装では条件に応じて）
+                if (Math.random() > 0.7) {
+                    const sampleWantTo = '人とのつながりを深めることで価値を創造する';
+                    updateLatestWantTo(sampleWantTo);
+                    // Airtableに保存
+                    await saveWantTo(sampleWantTo, 8);
+                }
+            }, 2000 + Math.random() * 2000); // 2-4秒の遅延
+        }
+
+        // 最新のWant toを読み込み
+        async function loadLatestWantTo() {
+            if (!currentUser) return;
+            
+            try {
+                const latestWantTo = await airtableAPI.getLatestWantTo(currentUser.id);
+                if (latestWantTo) {
+                    document.getElementById('latestWantTo').textContent = latestWantTo.fields.want_to_content;
+                } else {
+                    document.getElementById('latestWantTo').textContent = 'まだWant toが特定されていません';
+                }
+            } catch (error) {
+                console.error('Error loading latest Want to:', error);
+                document.getElementById('latestWantTo').textContent = 'Want toの読み込みに失敗しました';
+            }
+        }
+
+        // Want toを保存
+        async function saveWantTo(wantToContent, confidenceLevel = 5) {
+            if (!currentUser || !currentChatId) return false;
+            
+            try {
+                const result = await airtableAPI.saveWantTo(
+                    currentUser.id,
+                    wantToContent,
+                    currentChatId,
+                    confidenceLevel
+                );
+                
+                if (result) {
+                    // UI更新
+                    document.getElementById('latestWantTo').textContent = wantToContent;
+                    console.log('Want to saved successfully:', result);
+                    return true;
+                } else {
+                    console.error('Failed to save Want to');
+                    return false;
+                }
+            } catch (error) {
+                console.error('Error saving Want to:', error);
+                return false;
+            }
+        }
+
+        // 最新のWant toを更新（UIのみ）
+        function updateLatestWantTo(wantTo) {
+            document.getElementById('latestWantTo').textContent = wantTo;
+        }
+
+        // 初期化
+        document.addEventListener('DOMContentLoaded', function() {
+            // ログインモーダルを表示
+            document.getElementById('loginModal').classList.remove('hidden');
+        });
+    </script>
+</body>
+</html>
