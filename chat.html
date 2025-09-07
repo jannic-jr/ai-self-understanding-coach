@@ -193,9 +193,12 @@
 
             <!-- Want to 結果表示 -->
             <div class="p-4 border-t border-gray-700">
-                <h3 class="text-sm font-medium text-gray-400 mb-2">最新のWant to</h3>
-                <div id="latestWantTo" class="bg-chat-bg rounded-lg p-3 text-sm text-gray-300">
+                <h3 class="text-sm font-medium text-gray-400 mb-2">あなたのWant to</h3>
+                <div id="latestWantTo" class="bg-chat-bg rounded-lg p-3 text-sm text-gray-300 transition-all duration-300">
                     まだWant toが特定されていません
+                </div>
+                <div class="text-xs text-gray-500 mt-2">
+                    ※ セッション間で共有・更新されます
                 </div>
             </div>
         </div>
@@ -313,11 +316,11 @@
                 }
             }
 
-            async saveWantTo(userId, wantToContent, sessionId, confidenceLevel = 5) {
+            async saveWantTo(userId, wantToContent, confidenceLevel = 5) {
                 try {
-                    // 既存のWant toを確認
+                    // ユーザーの既存のWant toを確認（セッションに関係なく）
                     const existingResponse = await fetch(
-                        `${this.baseUrl}/${this.config.wantToTable}?filterByFormula=AND({user_id}="${userId}", {session_id}="${sessionId}")`,
+                        `${this.baseUrl}/${this.config.wantToTable}?filterByFormula={user_id}="${userId}"`,
                         {
                             headers: this.headers
                         }
@@ -325,7 +328,7 @@
                     const existingData = await existingResponse.json();
 
                     if (existingData.records.length > 0) {
-                        // 更新
+                        // 既存のレコードを更新（最新のものを更新）
                         const recordId = existingData.records[0].id;
                         const response = await fetch(`${this.baseUrl}/${this.config.wantToTable}/${recordId}`, {
                             method: 'PATCH',
@@ -333,13 +336,14 @@
                             body: JSON.stringify({
                                 fields: {
                                     want_to_content: wantToContent,
-                                    confidence_level: confidenceLevel
+                                    confidence_level: confidenceLevel,
+                                    session_id: currentChatId // 現在のセッションIDで更新
                                 }
                             })
                         });
                         return await response.json();
                     } else {
-                        // 新規作成
+                        // 新規作成（初回のみ）
                         const response = await fetch(`${this.baseUrl}/${this.config.wantToTable}`, {
                             method: 'POST',
                             headers: this.headers,
@@ -347,7 +351,7 @@
                                 fields: {
                                     user_id: userId,
                                     want_to_content: wantToContent,
-                                    session_id: sessionId,
+                                    session_id: currentChatId,
                                     confidence_level: confidenceLevel
                                 }
                             })
@@ -914,8 +918,11 @@
                 const extractedWantTo = difyAPI.extractWantTo(result.message);
                 if (extractedWantTo) {
                     console.log('Want to detected:', extractedWantTo);
+                    
+                    // UIを更新
                     updateLatestWantTo(extractedWantTo.wantTo);
-                    // Airtableに保存
+                    
+                    // ユーザー毎のWant toとしてAirtableに保存（セッション関係なし）
                     await saveWantTo(extractedWantTo.wantTo, extractedWantTo.confidence);
                 }
                 
@@ -964,8 +971,12 @@
                 // Want to の更新をシミュレート（実際の実装では条件に応じて）
                 if (Math.random() > 0.7) {
                     const sampleWantTo = '人とのつながりを深めることで価値を創造する';
+                    console.log('Simulated Want to detected:', sampleWantTo);
+                    
+                    // UIを更新
                     updateLatestWantTo(sampleWantTo);
-                    // Airtableに保存
+                    
+                    // ユーザー毎のWant toとしてAirtableに保存
                     await saveWantTo(sampleWantTo, 8);
                 }
             }, 2000 + Math.random() * 2000); // 2-4秒の遅延
@@ -988,15 +999,16 @@
             }
         }
 
-        // Want toを保存
+        // Want toを保存（ユーザー毎に1つのレコード）
         async function saveWantTo(wantToContent, confidenceLevel = 5) {
-            if (!currentUser || !currentChatId) return false;
+            if (!currentUser) return false;
             
             try {
+                console.log('Saving Want to for user:', currentUser.id, 'Content:', wantToContent);
+                
                 const result = await airtableAPI.saveWantTo(
                     currentUser.id,
                     wantToContent,
-                    currentChatId,
                     confidenceLevel
                 );
                 
@@ -1004,6 +1016,10 @@
                     // UI更新
                     document.getElementById('latestWantTo').textContent = wantToContent;
                     console.log('Want to saved successfully:', result);
+                    
+                    // 成功メッセージを表示（オプション）
+                    showWantToUpdateNotification(wantToContent);
+                    
                     return true;
                 } else {
                     console.error('Failed to save Want to');
@@ -1013,6 +1029,19 @@
                 console.error('Error saving Want to:', error);
                 return false;
             }
+        }
+
+        // Want to更新通知を表示
+        function showWantToUpdateNotification(wantTo) {
+            // サイドバーのWant to表示を一時的にハイライト
+            const wantToElement = document.getElementById('latestWantTo');
+            const originalClass = wantToElement.className;
+            
+            wantToElement.className = originalClass + ' ring-2 ring-blue-500 ring-opacity-50';
+            
+            setTimeout(() => {
+                wantToElement.className = originalClass;
+            }, 2000);
         }
 
         // 最新のWant toを更新（UIのみ）
