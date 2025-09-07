@@ -541,6 +541,67 @@
         const airtableAPI = new AirtableAPI(AIRTABLE_CONFIG);
         const difyAPI = new DifyAPI(DIFY_CONFIG);
 
+        // ローカルストレージからログイン状態を復元
+        function restoreLoginState() {
+            const savedUser = localStorage.getItem('currentUser');
+            const savedChats = localStorage.getItem('allChats');
+            
+            if (savedUser) {
+                try {
+                    currentUser = JSON.parse(savedUser);
+                    
+                    // チャット履歴も復元
+                    if (savedChats) {
+                        allChats = JSON.parse(savedChats);
+                        // 日付オブジェクトを復元
+                        Object.values(allChats).forEach(chat => {
+                            chat.createdAt = new Date(chat.createdAt);
+                            if (chat.messages) {
+                                chat.messages.forEach(msg => {
+                                    msg.timestamp = new Date(msg.timestamp);
+                                });
+                            }
+                        });
+                    }
+                    
+                    // ログイン状態を表示
+                    document.getElementById('loginModal').classList.add('hidden');
+                    document.getElementById('mainApp').classList.remove('hidden');
+                    document.getElementById('userInfo').textContent = `${currentUser.email.split('@')[0]}さん`;
+                    
+                    // 最新のWant toを読み込み
+                    loadLatestWantTo();
+                    
+                    // 最初のチャットを初期化（チャット履歴がない場合）
+                    if (Object.keys(allChats).length === 0) {
+                        initializeFirstChat();
+                    } else {
+                        // 最新のチャットを表示
+                        const latestChatId = Object.keys(allChats)[0];
+                        currentChatId = latestChatId;
+                        updateChatHistory();
+                        loadChat(latestChatId);
+                    }
+                    
+                    return true;
+                } catch (error) {
+                    console.error('Error restoring login state:', error);
+                    // エラーの場合はローカルストレージをクリア
+                    localStorage.removeItem('currentUser');
+                    localStorage.removeItem('allChats');
+                }
+            }
+            return false;
+        }
+
+        // ローカルストレージにログイン状態を保存
+        function saveLoginState() {
+            if (currentUser) {
+                localStorage.setItem('currentUser', JSON.stringify(currentUser));
+                localStorage.setItem('allChats', JSON.stringify(allChats));
+            }
+        }
+
         // ログイン処理
         document.getElementById('loginForm').addEventListener('submit', async function(e) {
             e.preventDefault();
@@ -587,6 +648,9 @@
                         airtableId: user.id
                     };
                     
+                    // ローカルストレージに保存
+                    saveLoginState();
+                    
                     // ログイン成功
                     document.getElementById('loginModal').classList.add('hidden');
                     document.getElementById('mainApp').classList.remove('hidden');
@@ -614,6 +678,10 @@
             if (currentChatId && allChats[currentChatId]) {
                 saveCurrentChatState();
             }
+            
+            // ローカルストレージをクリア
+            localStorage.removeItem('currentUser');
+            localStorage.removeItem('allChats');
             
             currentUser = null;
             currentChatId = null;
@@ -663,6 +731,9 @@
                 createdAt: new Date(),
                 messageCount: 0
             };
+            
+            // ローカルストレージを更新
+            saveLoginState();
             
             // チャット画面をクリア
             clearChatMessages();
@@ -893,6 +964,9 @@
                         }, 100);
                     }
                 }
+                
+                // ローカルストレージを更新
+                saveLoginState();
             }
         }
 
@@ -914,7 +988,7 @@
             } else if (lowerMessage.includes('会社') || lowerMessage.includes('仕事') || lowerMessage.includes('職場')) {
                 title = '💼 仕事・キャリアについて';
             } else if (lowerMessage.includes('夢') || lowerMessage.includes('目標') || lowerMessage.includes('やりたい')) {
-                title = '✨ 夢・目標について';
+                title = '✨夢・目標について';
             } else if (lowerMessage.includes('過去') || lowerMessage.includes('経験')) {
                 title = '📚 過去の経験について';
             } else if (lowerMessage.includes('組織') || lowerMessage.includes('チーム')) {
@@ -942,6 +1016,9 @@
             
             // チャット履歴を更新
             updateChatHistory();
+            
+            // ローカルストレージを更新
+            saveLoginState();
         }
 
         function showTypingIndicator() {
@@ -1160,8 +1237,11 @@
 
         // フォーム切り替え処理
         document.addEventListener('DOMContentLoaded', function() {
-            // ログインモーダルを表示
-            document.getElementById('loginModal').classList.remove('hidden');
+            // ログイン状態を復元を試行
+            if (!restoreLoginState()) {
+                // ログイン状態が復元できない場合はログインモーダルを表示
+                document.getElementById('loginModal').classList.remove('hidden');
+            }
             
             // パスワードを忘れた方はこちら
             document.getElementById('forgotPasswordBtn').addEventListener('click', function() {
