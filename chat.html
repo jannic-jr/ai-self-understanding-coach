@@ -576,10 +576,17 @@
                     if (Object.keys(allChats).length === 0) {
                         initializeFirstChat();
                     } else {
-                        // 最新のチャットを表示
-                        const latestChatId = Object.keys(allChats)[0];
+                        // 最新のチャットを表示（日付順でソートして最新を取得）
+                        const sortedChats = Object.entries(allChats).sort((a, b) => 
+                            new Date(b[1].createdAt) - new Date(a[1].createdAt)
+                        );
+                        const latestChatId = sortedChats[0][0];
                         currentChatId = latestChatId;
+                        
+                        // チャット履歴を更新
                         updateChatHistory();
+                        
+                        // 最新のチャットを読み込み
                         loadChat(latestChatId);
                     }
                     
@@ -713,6 +720,9 @@
             
             // チャット履歴を更新
             updateChatHistory();
+            
+            // ローカルストレージを更新
+            saveLoginState();
         }
 
         function startNewChat() {
@@ -773,6 +783,11 @@
             
             allChats[currentChatId].messages = messages;
             allChats[currentChatId].messageCount = messages.length;
+            
+            console.log('Saved chat state for:', currentChatId, 'Messages:', messages.length);
+            
+            // ローカルストレージも更新
+            saveLoginState();
         }
 
         // チャット画面をクリア
@@ -965,8 +980,8 @@
                     }
                 }
                 
-                // ローカルストレージを更新
-                saveLoginState();
+                // 現在のチャット状態とローカルストレージを更新
+                saveCurrentChatState();
             }
         }
 
@@ -988,7 +1003,7 @@
             } else if (lowerMessage.includes('会社') || lowerMessage.includes('仕事') || lowerMessage.includes('職場')) {
                 title = '💼 仕事・キャリアについて';
             } else if (lowerMessage.includes('夢') || lowerMessage.includes('目標') || lowerMessage.includes('やりたい')) {
-                title = '✨夢・目標について';
+                title = '✨ 夢・目標について';
             } else if (lowerMessage.includes('過去') || lowerMessage.includes('経験')) {
                 title = '📚 過去の経験について';
             } else if (lowerMessage.includes('組織') || lowerMessage.includes('チーム')) {
@@ -1234,6 +1249,13 @@
                 throw error;
             }
         }
+
+        // ページ離脱時にチャット状態を保存
+        window.addEventListener('beforeunload', function() {
+            if (currentChatId && allChats[currentChatId]) {
+                saveCurrentChatState();
+            }
+        });
 
         // フォーム切り替え処理
         document.addEventListener('DOMContentLoaded', function() {
