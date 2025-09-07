@@ -128,10 +128,10 @@
             <div id="loginFormContainer">
                 <form id="loginForm" class="space-y-6">
                     <div>
-                        <label for="username" class="block text-sm font-medium text-gray-300 mb-2">ユーザーID</label>
-                        <input type="text" id="username" name="username" required 
+                        <label for="email" class="block text-sm font-medium text-gray-300 mb-2">メールアドレス</label>
+                        <input type="email" id="email" name="email" required 
                                class="w-full px-4 py-3 bg-chat-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400"
-                               placeholder="ユーザーIDを入力">
+                               placeholder="メールアドレスを入力">
                     </div>
                     <div>
                         <label for="password" class="block text-sm font-medium text-gray-300 mb-2">パスワード</label>
@@ -139,15 +139,9 @@
                                class="w-full px-4 py-3 bg-chat-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400"
                                placeholder="パスワードを入力">
                     </div>
-                    <div>
-                        <label for="email" class="block text-sm font-medium text-gray-300 mb-2">メールアドレス（新規登録時のみ）</label>
-                        <input type="email" id="email" name="email"
-                               class="w-full px-4 py-3 bg-chat-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400"
-                               placeholder="メールアドレスを入力（任意）">
-                    </div>
                     <button type="submit" 
                             class="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-3 px-6 rounded-lg font-medium hover:from-blue-600 hover:to-purple-700 transition-all duration-200 transform hover:scale-105">
-                        ログイン
+                        ログイン / 新規登録
                     </button>
                 </form>
                 
@@ -182,8 +176,8 @@
             
             <div class="mt-6 text-center">
                 <p class="text-gray-400 text-sm">
-                    アカウントをお持ちでない場合は、<br>
-                    任意のユーザーIDとパスワードでログインできます
+                    初回の場合は、メールアドレスとパスワードで<br>
+                    自動的にアカウントが作成されます
                 </p>
             </div>
         </div>
@@ -331,23 +325,17 @@
                 };
             }
 
-            async createUser(userId, password, email = null) {
+            async createUser(email, password) {
                 try {
-                    const fields = {
-                        user_id: userId,
-                        password: password
-                    };
-                    
-                    // メールアドレスが提供された場合のみ追加
-                    if (email) {
-                        fields.email = email;
-                    }
-                    
                     const response = await fetch(`${this.baseUrl}/${this.config.usersTable}`, {
                         method: 'POST',
                         headers: this.headers,
                         body: JSON.stringify({
-                            fields: fields
+                            fields: {
+                                user_id: email, // メールアドレスをユーザーIDとして使用
+                                email: email,   // メールアドレスも別途保存
+                                password: password
+                            }
                         })
                     });
                     return await response.json();
@@ -359,8 +347,9 @@
 
             async getUserByEmail(email) {
                 try {
+                    // user_idがメールアドレスなので、user_idで検索
                     const response = await fetch(
-                        `${this.baseUrl}/${this.config.usersTable}?filterByFormula={email}="${email}"`,
+                        `${this.baseUrl}/${this.config.usersTable}?filterByFormula={user_id}="${email}"`,
                         {
                             headers: this.headers
                         }
@@ -555,11 +544,17 @@
         // ログイン処理
         document.getElementById('loginForm').addEventListener('submit', async function(e) {
             e.preventDefault();
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
             const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
             
-            if (username && password) {
+            if (email && password) {
+                // メールアドレスの形式チェック
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!emailRegex.test(email)) {
+                    alert('有効なメールアドレスを入力してください');
+                    return;
+                }
+                
                 // ローディング表示
                 const submitBtn = e.target.querySelector('button[type="submit"]');
                 const originalText = submitBtn.textContent;
@@ -567,24 +562,27 @@
                 submitBtn.disabled = true;
 
                 try {
-                    // ユーザーの存在確認
-                    let user = await airtableAPI.getUserByUserId(username);
+                    // ユーザーの存在確認（メールアドレス = ユーザーID）
+                    let user = await airtableAPI.getUserByUserId(email);
                     
                     if (!user) {
                         // 新規ユーザーの場合、作成
-                        user = await airtableAPI.createUser(username, password, email);
+                        console.log('Creating new user with email:', email);
+                        user = await airtableAPI.createUser(email, password);
                         if (!user) {
                             throw new Error('ユーザーの作成に失敗しました');
                         }
+                        alert('新しいアカウントが作成されました！');
                     } else {
-                        // 既存ユーザーのパスワード確認（簡易実装）
+                        // 既存ユーザーのパスワード確認
                         if (user.fields.password !== password) {
                             throw new Error('パスワードが正しくありません');
                         }
                     }
 
                     currentUser = {
-                        id: username,
+                        id: email, // メールアドレスをIDとして使用
+                        email: email,
                         password: password,
                         airtableId: user.id
                     };
@@ -592,7 +590,7 @@
                     // ログイン成功
                     document.getElementById('loginModal').classList.add('hidden');
                     document.getElementById('mainApp').classList.remove('hidden');
-                    document.getElementById('userInfo').textContent = `${username}さん`;
+                    document.getElementById('userInfo').textContent = `${email.split('@')[0]}さん`; // @より前の部分を表示
                     
                     // 最新のWant toを読み込み
                     await loadLatestWantTo();
@@ -622,7 +620,7 @@
             allChats = {}; // チャットデータをクリア
             document.getElementById('loginModal').classList.remove('hidden');
             document.getElementById('mainApp').classList.add('hidden');
-            document.getElementById('username').value = '';
+            document.getElementById('email').value = '';
             document.getElementById('password').value = '';
         });
 
