@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>自己理解コーチ - AI チャット</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -123,24 +124,61 @@
                 <p class="text-gray-400">ログインして自己理解の旅を始めましょう</p>
             </div>
             
-            <form id="loginForm" class="space-y-6">
-                <div>
-                    <label for="username" class="block text-sm font-medium text-gray-300 mb-2">ユーザーID</label>
-                    <input type="text" id="username" name="username" required 
-                           class="w-full px-4 py-3 bg-chat-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400"
-                           placeholder="ユーザーIDを入力">
+            <!-- ログインフォーム -->
+            <div id="loginFormContainer">
+                <form id="loginForm" class="space-y-6">
+                    <div>
+                        <label for="username" class="block text-sm font-medium text-gray-300 mb-2">ユーザーID</label>
+                        <input type="text" id="username" name="username" required 
+                               class="w-full px-4 py-3 bg-chat-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400"
+                               placeholder="ユーザーIDを入力">
+                    </div>
+                    <div>
+                        <label for="password" class="block text-sm font-medium text-gray-300 mb-2">パスワード</label>
+                        <input type="password" id="password" name="password" required
+                               class="w-full px-4 py-3 bg-chat-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400"
+                               placeholder="パスワードを入力">
+                    </div>
+                    <div>
+                        <label for="email" class="block text-sm font-medium text-gray-300 mb-2">メールアドレス（新規登録時のみ）</label>
+                        <input type="email" id="email" name="email"
+                               class="w-full px-4 py-3 bg-chat-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400"
+                               placeholder="メールアドレスを入力（任意）">
+                    </div>
+                    <button type="submit" 
+                            class="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-3 px-6 rounded-lg font-medium hover:from-blue-600 hover:to-purple-700 transition-all duration-200 transform hover:scale-105">
+                        ログイン
+                    </button>
+                </form>
+                
+                <div class="mt-4 text-center">
+                    <button id="forgotPasswordBtn" class="text-blue-400 hover:text-blue-300 text-sm underline">
+                        パスワードを忘れた方はこちら
+                    </button>
                 </div>
-                <div>
-                    <label for="password" class="block text-sm font-medium text-gray-300 mb-2">パスワード</label>
-                    <input type="password" id="password" name="password" required
-                           class="w-full px-4 py-3 bg-chat-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400"
-                           placeholder="パスワードを入力">
+            </div>
+
+            <!-- パスワードリセットフォーム -->
+            <div id="resetFormContainer" class="hidden">
+                <form id="resetForm" class="space-y-6">
+                    <div>
+                        <label for="resetEmail" class="block text-sm font-medium text-gray-300 mb-2">メールアドレス</label>
+                        <input type="email" id="resetEmail" name="resetEmail" required
+                               class="w-full px-4 py-3 bg-chat-bg border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400"
+                               placeholder="登録したメールアドレスを入力">
+                    </div>
+                    <button type="submit" 
+                            class="w-full bg-gradient-to-r from-purple-500 to-pink-600 text-white py-3 px-6 rounded-lg font-medium hover:from-purple-600 hover:to-pink-700 transition-all duration-200 transform hover:scale-105">
+                        パスワードを送信
+                    </button>
+                </form>
+                
+                <div class="mt-4 text-center">
+                    <button id="backToLoginBtn" class="text-gray-400 hover:text-white text-sm underline">
+                        ログイン画面に戻る
+                    </button>
                 </div>
-                <button type="submit" 
-                        class="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-3 px-6 rounded-lg font-medium hover:from-blue-600 hover:to-purple-700 transition-all duration-200 transform hover:scale-105">
-                    ログイン
-                </button>
-            </form>
+            </div>
             
             <div class="mt-6 text-center">
                 <p class="text-gray-400 text-sm">
@@ -270,6 +308,18 @@
         // 開発モード設定（本番環境ではfalseに設定）
         const USE_SIMULATION = false; // trueの場合はシミュレーション、falseの場合は実際のDify API
 
+        // EmailJS設定（https://www.emailjs.com/で設定が必要）
+        const EMAILJS_CONFIG = {
+            publicKey: 'YOUR_EMAILJS_PUBLIC_KEY', // EmailJSの公開キー
+            serviceId: 'YOUR_SERVICE_ID', // EmailJSのサービスID
+            templateId: 'YOUR_TEMPLATE_ID' // EmailJSのテンプレートID
+        };
+
+        // EmailJSを初期化
+        if (typeof emailjs !== 'undefined') {
+            emailjs.init(EMAILJS_CONFIG.publicKey);
+        }
+
         // Airtable API関数
         class AirtableAPI {
             constructor(config) {
@@ -281,21 +331,44 @@
                 };
             }
 
-            async createUser(userId, password) {
+            async createUser(userId, password, email = null) {
                 try {
+                    const fields = {
+                        user_id: userId,
+                        password: password
+                    };
+                    
+                    // メールアドレスが提供された場合のみ追加
+                    if (email) {
+                        fields.email = email;
+                    }
+                    
                     const response = await fetch(`${this.baseUrl}/${this.config.usersTable}`, {
                         method: 'POST',
                         headers: this.headers,
                         body: JSON.stringify({
-                            fields: {
-                                user_id: userId,
-                                password: password
-                            }
+                            fields: fields
                         })
                     });
                     return await response.json();
                 } catch (error) {
                     console.error('Error creating user:', error);
+                    return null;
+                }
+            }
+
+            async getUserByEmail(email) {
+                try {
+                    const response = await fetch(
+                        `${this.baseUrl}/${this.config.usersTable}?filterByFormula={email}="${email}"`,
+                        {
+                            headers: this.headers
+                        }
+                    );
+                    const data = await response.json();
+                    return data.records.length > 0 ? data.records[0] : null;
+                } catch (error) {
+                    console.error('Error getting user by email:', error);
                     return null;
                 }
             }
@@ -484,6 +557,7 @@
             e.preventDefault();
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
+            const email = document.getElementById('email').value;
             
             if (username && password) {
                 // ローディング表示
@@ -498,7 +572,7 @@
                     
                     if (!user) {
                         // 新規ユーザーの場合、作成
-                        user = await airtableAPI.createUser(username, password);
+                        user = await airtableAPI.createUser(username, password, email);
                         if (!user) {
                             throw new Error('ユーザーの作成に失敗しました');
                         }
@@ -1049,10 +1123,94 @@
             document.getElementById('latestWantTo').textContent = wantTo;
         }
 
-        // 初期化
+        // パスワードリセット機能
+        async function resetPassword(email) {
+            try {
+                // メールアドレスでユーザーを検索
+                const user = await airtableAPI.getUserByEmail(email);
+                
+                if (!user) {
+                    throw new Error('そのメールアドレスは登録されていません');
+                }
+                
+                // メールを送信（EmailJS使用）
+                const templateParams = {
+                    to_email: email,
+                    user_id: user.fields.user_id,
+                    password: user.fields.password,
+                    reset_time: new Date().toLocaleString('ja-JP')
+                };
+                
+                if (typeof emailjs !== 'undefined') {
+                    await emailjs.send(
+                        EMAILJS_CONFIG.serviceId,
+                        EMAILJS_CONFIG.templateId,
+                        templateParams
+                    );
+                    return true;
+                } else {
+                    // EmailJS が利用できない場合のフォールバック
+                    console.log('EmailJS not available. Password for', user.fields.user_id, ':', user.fields.password);
+                    alert(`パスワードリセット情報:\nユーザーID: ${user.fields.user_id}\nパスワード: ${user.fields.password}\n\n※ 実際のメール送信機能は設定が必要です`);
+                    return true;
+                }
+            } catch (error) {
+                console.error('Error resetting password:', error);
+                throw error;
+            }
+        }
+
+        // フォーム切り替え処理
         document.addEventListener('DOMContentLoaded', function() {
             // ログインモーダルを表示
             document.getElementById('loginModal').classList.remove('hidden');
+            
+            // パスワードを忘れた方はこちら
+            document.getElementById('forgotPasswordBtn').addEventListener('click', function() {
+                document.getElementById('loginFormContainer').classList.add('hidden');
+                document.getElementById('resetFormContainer').classList.remove('hidden');
+            });
+            
+            // ログイン画面に戻る
+            document.getElementById('backToLoginBtn').addEventListener('click', function() {
+                document.getElementById('resetFormContainer').classList.add('hidden');
+                document.getElementById('loginFormContainer').classList.remove('hidden');
+                document.getElementById('resetEmail').value = '';
+            });
+            
+            // パスワードリセットフォーム
+            document.getElementById('resetForm').addEventListener('submit', async function(e) {
+                e.preventDefault();
+                const email = document.getElementById('resetEmail').value;
+                
+                if (!email) {
+                    alert('メールアドレスを入力してください');
+                    return;
+                }
+                
+                // ローディング表示
+                const submitBtn = e.target.querySelector('button[type="submit"]');
+                const originalText = submitBtn.textContent;
+                submitBtn.textContent = '送信中...';
+                submitBtn.disabled = true;
+                
+                try {
+                    await resetPassword(email);
+                    alert('パスワードをメールアドレスに送信しました。メールをご確認ください。');
+                    
+                    // ログイン画面に戻る
+                    document.getElementById('resetFormContainer').classList.add('hidden');
+                    document.getElementById('loginFormContainer').classList.remove('hidden');
+                    document.getElementById('resetEmail').value = '';
+                    
+                } catch (error) {
+                    alert('エラー: ' + error.message);
+                } finally {
+                    // ローディング解除
+                    submitBtn.textContent = originalText;
+                    submitBtn.disabled = false;
+                }
+            });
         });
     </script>
 </body>
