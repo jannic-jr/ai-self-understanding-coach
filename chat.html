@@ -258,7 +258,7 @@
         // グローバル変数
         let currentUser = null;
         let currentChatId = null;
-        let chatHistory = [];
+        let allChats = {}; // 全てのチャットデータを保存 {chatId: {title, messages, createdAt}}
         let isTyping = false;
 
         // API設定（本番環境では環境変数から取得）
@@ -530,8 +530,8 @@
                     // 最新のWant toを読み込み
                     await loadLatestWantTo();
                     
-                    // 新しいチャットを開始
-                    startNewChat();
+                    // 最初のチャットを初期化
+                    initializeFirstChat();
                     
                 } catch (error) {
                     alert('ログインエラー: ' + error.message);
@@ -545,8 +545,14 @@
 
         // ログアウト処理
         document.getElementById('logoutBtn').addEventListener('click', function() {
+            // 現在のチャット状態を保存
+            if (currentChatId && allChats[currentChatId]) {
+                saveCurrentChatState();
+            }
+            
             currentUser = null;
             currentChatId = null;
+            allChats = {}; // チャットデータをクリア
             document.getElementById('loginModal').classList.remove('hidden');
             document.getElementById('mainApp').classList.add('hidden');
             document.getElementById('username').value = '';
@@ -556,42 +562,176 @@
         // 新しいチャット開始
         document.getElementById('newChatBtn').addEventListener('click', startNewChat);
 
-        function startNewChat() {
+        // 初回チャットを初期化
+        function initializeFirstChat() {
             currentChatId = 'chat_' + Date.now();
-            const chatMessages = document.getElementById('chatMessages');
+            allChats[currentChatId] = {
+                title: '新しいセッション',
+                messages: [],
+                createdAt: new Date(),
+                messageCount: 0
+            };
             
-            // チャットエリアをクリア（初回メッセージは残す）
-            const initialMessage = chatMessages.querySelector('.flex:first-child');
-            chatMessages.innerHTML = '';
-            if (initialMessage) {
-                chatMessages.appendChild(initialMessage);
-            }
+            // 初回メッセージを表示
+            showInitialMessage();
             
             // Difyの新しい会話を開始
             difyAPI.startNewConversation();
             
-            // チャット履歴に追加
-            addChatToHistory(currentChatId, '新しいセッション');
+            // チャット履歴を更新
+            updateChatHistory();
+        }
+
+        function startNewChat() {
+            // 現在のチャットが存在する場合は保存
+            if (currentChatId && allChats[currentChatId]) {
+                saveCurrentChatState();
+            }
+            
+            // 新しいチャットIDを生成
+            currentChatId = 'chat_' + Date.now();
+            
+            // 新しいチャットデータを初期化
+            allChats[currentChatId] = {
+                title: '新しいセッション',
+                messages: [],
+                createdAt: new Date(),
+                messageCount: 0
+            };
+            
+            // チャット画面をクリア
+            clearChatMessages();
+            
+            // 初回メッセージを表示
+            showInitialMessage();
+            
+            // Difyの新しい会話を開始
+            difyAPI.startNewConversation();
+            
+            // チャット履歴を更新
+            updateChatHistory();
+        }
+
+        // 現在のチャット状態を保存
+        function saveCurrentChatState() {
+            if (!currentChatId || !allChats[currentChatId]) return;
+            
+            const chatMessages = document.getElementById('chatMessages');
+            const messageElements = chatMessages.querySelectorAll('.flex:not(#typingIndicator)');
+            
+            // 初回メッセージを除く
+            const messages = [];
+            messageElements.forEach((element, index) => {
+                if (index === 0) return; // 初回メッセージはスキップ
+                
+                const isUser = element.classList.contains('justify-end');
+                const messageContent = element.querySelector('.bg-message-user, .bg-message-ai');
+                if (messageContent) {
+                    messages.push({
+                        content: messageContent.innerHTML,
+                        sender: isUser ? 'user' : 'ai',
+                        timestamp: new Date()
+                    });
+                }
+            });
+            
+            allChats[currentChatId].messages = messages;
+            allChats[currentChatId].messageCount = messages.length;
+        }
+
+        // チャット画面をクリア
+        function clearChatMessages() {
+            const chatMessages = document.getElementById('chatMessages');
+            chatMessages.innerHTML = '';
+        }
+
+        // 初回メッセージを表示
+        function showInitialMessage() {
+            const chatMessages = document.getElementById('chatMessages');
+            const initialMessage = document.createElement('div');
+            initialMessage.className = 'flex items-start space-x-3 mb-6';
+            initialMessage.innerHTML = `
+                <div class="w-8 h-8 bg-gradient-to-r from-green-500 to-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+                    <span class="text-sm">🤖</span>
+                </div>
+                <div class="bg-message-ai text-gray-800 rounded-2xl rounded-tl-md p-4 max-w-2xl">
+                    <p class="mb-3">こんにちは！私は自己理解をサポートするコーチです。</p>
+                    <p class="mb-3">今日は、あなたの心の底からやりたいこと（Want to）を一緒に見つけていきましょう。</p>
+                    <p>この会話を通じて、あなた自身の本質的な欲求を理解し、それが社会にどのように貢献できるかを明確にしていきます。</p>
+                    <p class="mt-3 font-medium">準備はいかがですか？自己理解の旅を始めてみませんか？</p>
+                </div>
+            `;
+            chatMessages.appendChild(initialMessage);
+        }
+
+        // チャット履歴を更新
+        function updateChatHistory() {
+            const historyContainer = document.getElementById('chatHistory');
+            historyContainer.innerHTML = '';
+            
+            // 日付順でソート（新しい順）
+            const sortedChats = Object.entries(allChats).sort((a, b) => 
+                new Date(b[1].createdAt) - new Date(a[1].createdAt)
+            );
+            
+            console.log('Updating chat history with', sortedChats.length, 'chats');
+            
+            sortedChats.forEach(([chatId, chatData]) => {
+                addChatToHistory(chatId, chatData.title, chatData.createdAt, chatData.messageCount);
+            });
         }
 
         // チャット履歴に追加
-        function addChatToHistory(chatId, title) {
+        function addChatToHistory(chatId, title, createdAt, messageCount = 0) {
             const historyContainer = document.getElementById('chatHistory');
             const chatItem = document.createElement('div');
-            chatItem.className = 'p-3 rounded-lg hover:bg-gray-700 cursor-pointer transition-colors duration-200 border-l-2 border-transparent hover:border-blue-500';
+            
+            // 現在のチャットかどうかで背景色を変える
+            const isCurrentChat = chatId === currentChatId;
+            const bgClass = isCurrentChat ? 'bg-gray-700 border-blue-500' : 'hover:bg-gray-700 hover:border-blue-500';
+            
+            chatItem.className = `p-3 rounded-lg cursor-pointer transition-colors duration-200 border-l-2 border-transparent ${bgClass}`;
             chatItem.innerHTML = `
                 <div class="text-sm font-medium text-white truncate">${title}</div>
-                <div class="text-xs text-gray-400 mt-1">${new Date().toLocaleString('ja-JP')}</div>
+                <div class="text-xs text-gray-500 mt-1">${messageCount > 0 ? `${messageCount}件のメッセージ` : '新しいセッション'}</div>
+                <div class="text-xs text-gray-400 mt-1">${new Date(createdAt).toLocaleString('ja-JP')}</div>
             `;
             chatItem.onclick = () => loadChat(chatId);
             
-            historyContainer.insertBefore(chatItem, historyContainer.firstChild);
+            historyContainer.appendChild(chatItem);
         }
 
-        // チャット読み込み（将来の実装用）
+        // チャット読み込み
         function loadChat(chatId) {
-            // 実装予定：選択されたチャットを読み込む
-            console.log('Loading chat:', chatId);
+            if (chatId === currentChatId) return; // 現在のチャットの場合は何もしない
+            
+            // 現在のチャット状態を保存
+            if (currentChatId && allChats[currentChatId]) {
+                saveCurrentChatState();
+            }
+            
+            // 新しいチャットに切り替え
+            currentChatId = chatId;
+            
+            // チャット画面をクリア
+            clearChatMessages();
+            
+            // 初回メッセージを表示
+            showInitialMessage();
+            
+            // 保存されたメッセージを復元
+            const chatData = allChats[chatId];
+            if (chatData && chatData.messages) {
+                chatData.messages.forEach(msg => {
+                    addMessageToUI(msg.content, msg.sender, false); // アニメーションなしで追加
+                });
+            }
+            
+            // Difyの会話をリセット
+            difyAPI.startNewConversation();
+            
+            // チャット履歴の選択状態を更新
+            updateChatHistory();
         }
 
         // メッセージ送信処理
@@ -628,16 +768,17 @@
             }
         }
 
-        function addMessage(content, sender) {
+        // メッセージをUIに追加（内部用）
+        function addMessageToUI(content, sender, animate = true) {
             const chatMessages = document.getElementById('chatMessages');
             const messageDiv = document.createElement('div');
             
             if (sender === 'user') {
                 // ユーザーメッセージ：右側に表示
-                messageDiv.className = 'flex items-start justify-end space-x-3 mb-6 message-animation';
+                messageDiv.className = `flex items-start justify-end space-x-3 mb-6 ${animate ? 'message-animation' : ''}`;
                 messageDiv.innerHTML = `
                     <div class="bg-message-user text-white rounded-2xl rounded-tr-md p-4 max-w-2xl">
-                        ${content.replace(/\n/g, '<br>')}
+                        ${content}
                     </div>
                     <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
                         <span class="text-sm">👤</span>
@@ -645,19 +786,97 @@
                 `;
             } else {
                 // AIメッセージ：左側に表示
-                messageDiv.className = 'flex items-start space-x-3 mb-6 message-animation';
+                messageDiv.className = `flex items-start space-x-3 mb-6 ${animate ? 'message-animation' : ''}`;
                 messageDiv.innerHTML = `
                     <div class="w-8 h-8 bg-gradient-to-r from-green-500 to-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
                         <span class="text-sm">🤖</span>
                     </div>
                     <div class="bg-message-ai text-gray-800 rounded-2xl rounded-tl-md p-4 max-w-2xl">
-                        ${content.replace(/\n/g, '<br>')}
+                        ${content}
                     </div>
                 `;
             }
             
             chatMessages.appendChild(messageDiv);
             chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // メッセージを追加（外部用）
+        function addMessage(content, sender) {
+            // UIに表示
+            const formattedContent = content.replace(/\n/g, '<br>');
+            addMessageToUI(formattedContent, sender, true);
+            
+            // チャットデータに保存
+            if (currentChatId && allChats[currentChatId]) {
+                allChats[currentChatId].messages.push({
+                    content: formattedContent,
+                    sender: sender,
+                    timestamp: new Date()
+                });
+                allChats[currentChatId].messageCount = allChats[currentChatId].messages.length;
+                
+                // ユーザーの最初のメッセージでタイトルを生成
+                if (sender === 'user') {
+                    const userMessageCount = allChats[currentChatId].messages.filter(msg => msg.sender === 'user').length;
+                    console.log('User message count:', userMessageCount, 'Current message:', content);
+                    
+                    if (userMessageCount === 1) {
+                        // 少し遅延させてタイトル生成（UIの更新後に実行）
+                        setTimeout(() => {
+                            generateChatTitle(content);
+                        }, 100);
+                    }
+                }
+            }
+        }
+
+        // チャットタイトルを生成
+        function generateChatTitle(firstUserMessage) {
+            if (!currentChatId || !allChats[currentChatId]) {
+                console.log('generateChatTitle: No current chat or chat data');
+                return;
+            }
+            
+            console.log('Generating title for message:', firstUserMessage);
+            
+            let title = '';
+            const lowerMessage = firstUserMessage.toLowerCase();
+            
+            // 特定のキーワードに基づいてタイトルを調整
+            if (lowerMessage.includes('はじめ') || lowerMessage.includes('開始') || lowerMessage.includes('お願い')) {
+                title = '🎯 自己理解セッション開始';
+            } else if (lowerMessage.includes('会社') || lowerMessage.includes('仕事') || lowerMessage.includes('職場')) {
+                title = '💼 仕事・キャリアについて';
+            } else if (lowerMessage.includes('夢') || lowerMessage.includes('目標') || lowerMessage.includes('やりたい')) {
+                title = '✨ 夢・目標について';
+            } else if (lowerMessage.includes('過去') || lowerMessage.includes('経験')) {
+                title = '📚 過去の経験について';
+            } else if (lowerMessage.includes('組織') || lowerMessage.includes('チーム')) {
+                title = '👥 組織・チームについて';
+            } else if (lowerMessage.includes('大学') || lowerMessage.includes('学校') || lowerMessage.includes('部活')) {
+                title = '🎓 学生時代について';
+            } else if (lowerMessage.includes('趣味') || lowerMessage.includes('好き')) {
+                title = '🎨 趣味・興味について';
+            } else {
+                // メッセージの内容から適切な長さでタイトルを生成
+                const cleanMessage = firstUserMessage.replace(/[。！？\n]/g, '').trim();
+                if (cleanMessage.length > 20) {
+                    title = '💬 ' + cleanMessage.substring(0, 20) + '...';
+                } else if (cleanMessage.length > 0) {
+                    title = '💬 ' + cleanMessage;
+                } else {
+                    title = '💬 新しい会話';
+                }
+            }
+            
+            console.log('Generated title:', title);
+            
+            // タイトルを更新
+            allChats[currentChatId].title = title;
+            
+            // チャット履歴を更新
+            updateChatHistory();
         }
 
         function showTypingIndicator() {
